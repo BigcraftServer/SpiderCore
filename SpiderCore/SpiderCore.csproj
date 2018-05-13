@@ -5,4 +5,18 @@
     <TargetFramework>netcoreapp2.0</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Folder Include="Core\" />
+    <Folder Include="Grpc\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.5.1" />
+    <PackageReference Include="Grpc" Version="1.12.0-pre1" />
+    <PackageReference Include="Grpc.Core" Version="1.12.0-pre1" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.8.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+    <PackageReference Include="RestSharp" Version="106.3.0-alpha0025" />
+  </ItemGroup>
+
 </Project>
