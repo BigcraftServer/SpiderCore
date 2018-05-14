@@ -1,6 +1,8 @@
 ﻿using Grpc.Core;
 using HtmlAgilityPack;
+using ProxyPool.Grpc;
 using RestSharp;
+using SpiderCore.Enum;
 using SpiderCore.Models;
 using System;
 using System.Collections.Generic;
@@ -46,20 +48,18 @@ namespace SpiderCore {
 ";
       var requestPP = new ResponseParser() {
         Document = new Dictionary<string, DocumentParser>() {
-          { "Proxies",new DocumentParser(){
-            XPath=  "//table[@id='proxylisttable']/tbody/tr",
-            Type = "Array",
-            Parser = new Dictionary<string,DocumentNodeParser>(){
+          { "Proxies",new DocumentParser("//table[@id='proxylisttable']/tbody/tr"){
+            OutputType = Enum.OutputType.Array,
+            Parser = new Dictionary<string,DocumentParser>(){
               { "IpAddress",0 },
               { "Port",1 },
               { "CountryCode",2 },
               { "AnonymousType",4},
-              { "Type",new DocumentNodeParser(){
-                Position = "6",
-                Convert = new Dictionary<string,string>(){
-                  { "yes","HTTPS"},{"no","HTTP" }
-                }
-              } }
+              { "Type",
+                new DocumentParser(6,new Dictionary<string,string>(){
+                    { "yes","HTTPS"},{"no","HTTP" }
+                  })
+              }
             }
           } }
         }
@@ -80,111 +80,73 @@ namespace SpiderCore {
 
       var resultDic = resultObject as IDictionary<String, object>;
 
-
-      foreach (var parser in requestPP.Document) {
-        switch (parser.Value.Type) {
-          case "Single":
-            throw new NotImplementedException();
-            break;
-          case "Array":
-            IList<dynamic> result = new List<dynamic>();
-            //获取这个节点
-            var currentNode = doc.DocumentNode.SelectNodes(parser.Value.XPath);
-            foreach (var node in currentNode) {
-
-              dynamic nodeResultObject = new System.Dynamic.ExpandoObject();
-
-              var nodeResultDic = nodeResultObject as IDictionary<String, object>;
-              //从这个Node里拿Parser的值
-              foreach (var nodeParser in parser.Value.Parser) {
-                if (nodeParser.Value.Convert != null && nodeParser.Value.Convert.Any()) {
-                  nodeResultDic[nodeParser.Key] = nodeParser.Value.Convert[node.ChildNodes[int.Parse(nodeParser.Value.Position)].InnerText];
-                } else {
-                  nodeResultDic[nodeParser.Key] = node.ChildNodes[int.Parse(nodeParser.Value.Position)].InnerText;
-                }
+      object Parser(HtmlNode node, DocumentParser parser) {
+        switch (parser.OutputType) {
+          case Enum.OutputType.Text | Enum.OutputType.Convert:
+            return parser.Converts[GetNode(node, parser.PositionType, parser.Position).InnerText];
+          case Enum.OutputType.Text:
+            return GetNode(node, parser.PositionType, parser.Position).InnerText;
+          case Enum.OutputType.Html:
+            return GetNode(node, parser.PositionType, parser.Position).InnerHtml;
+          case Enum.OutputType.Array:
+            List<object> results = new List<object>();
+            foreach (var _node in GetNodes(node, parser.PositionType, parser.Position)) {
+              dynamic result = new System.Dynamic.ExpandoObject();
+              var resultMap = result as IDictionary<string, object>;
+              foreach (var _parser in parser.Parser) {
+                resultMap[_parser.Key] = Parser(_node, _parser.Value);
               }
-              result.Add(nodeResultDic);
+              results.Add(result);
             }
-            resultDic[parser.Key] = result;
-            break;
+            return results;
+          case Enum.OutputType.None:
           default:
-            throw new InvalidOperationException($"{parser.Value.Type} is invalid");
+            throw new Exception("吃柠檬");
+        }
+      }
+      HtmlNode GetNode(HtmlNode node, PositionType positionType, object position) {
+        switch (positionType) {
+          case PositionType.XPath:
+            return node.SelectSingleNode(position.ToString());
+          case PositionType.Index:
+            return node.ChildNodes[Convert.ToInt32(position)];
+          case PositionType.None:
+          default:
+            throw new Exception("吃柠檬");
+        }
+      }
+      HtmlNodeCollection GetNodes(HtmlNode documentNode, PositionType positionType, object position) {
+        switch (positionType) {
+          case Enum.PositionType.XPath:
+            return documentNode.SelectNodes(position.ToString());
+          case Enum.PositionType.Index:
+            return documentNode.ChildNodes[Convert.ToInt32(position)].ChildNodes;
+          case Enum.PositionType.None:
+          default:
+            throw new Exception("吃柠檬");
         }
       }
 
-      //     IRestResponse response = client.Execute(request);
-      //     var content = response.Content; // raw content as string
-      //
-      //     // or automatically deserialize result
-      //     // return content type is sniffed but can be explicitly set via RestClient.AddHandler();
-      //     RestResponse<Person> response2 = client.Execute<Person>(request);
-      //     var name = response2.Data.Name;
-      //
-      //     // easy async support
-      //     client.ExecuteAsync(request, response => {
-      //       Console.WriteLine(response.Content);
-      //     });
-      //
-      //     // async with deserialization
-      //     var asyncHandle = client.ExecuteAsync<Person>(request, response => {
-      //       Console.WriteLine(response.Data.Name);
-      //     });
-      //
-      //     // abort the request on demand
-      //     asyncHandle.Abort();
-      //var url = "https://free-proxy-list.net/";
-      //var web = new HtmlWeb();
-      //var doc = web.Load(url, "GET", new WebProxy("127.0.0.1", 1080), new NetworkCredential());
-      //var allNode = doc.DocumentNode.SelectSingleNode("//table[@id='proxylisttable']").SelectNodes("//tbody/tr");
-      //IList<ProxyPool.Grpc.Proxy> proxies = new List<ProxyPool.Grpc.Proxy>();
-      //foreach (var item in allNode) {
-      //  ProxyPool.Grpc.Proxy proxy = new ProxyPool.Grpc.Proxy() {
-      //    IpAddress = item.ChildNodes[0].InnerText.Trim(),
-      //    Port = int.Parse(item.ChildNodes[1].InnerText.Trim()),
-      //    CountryCode = item.ChildNodes[2].InnerText.Trim(),
-      //    AnonymousType = item.ChildNodes[4].InnerText.Trim(),
-      //    Type = item.ChildNodes[6].InnerText.Trim()
-      //  };
-      //  proxies.Add(proxy);
-      //}
-      ////Test
-      //var testUrl = url;
-      //IList<ProxyPool.Grpc.Proxy> proxies1 = new List<ProxyPool.Grpc.Proxy>();
-      //int i = 1;
-      //var tasks = proxies.Select(async proxy => {
-      //  HttpWebRequest request = WebRequest.CreateHttp("http://source.gbihealth.com/");
-      //  request.Proxy = new WebProxy(proxy.IpAddress, proxy.Port);
-      //  request.Method = "GET";
-      //  request.Timeout = 50000;
-      //  request.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36";
-      //  try {
-      //    using (HttpWebResponse response = await request.GetResponseAsync() as HttpWebResponse) {
-      //      if (response.StatusCode != HttpStatusCode.RequestTimeout || response.StatusCode != HttpStatusCode.GatewayTimeout) {
-      //        i++;
-      //        Console.WriteLine($"{i}/{proxies.Count}");
-      //        proxies1.Add(proxy);
-      //      }
-      //    }
-      //  } catch {
+      foreach (var item in requestPP.Document) {
+        resultDic[item.Key] = Parser(doc.DocumentNode, item.Value);
+      }
+      List<dynamic> proxies = new List<dynamic>();
+      int i = 0;
+      var tasks = (resultDic["Proxies"] as IList<dynamic>).Select(async proxy => {
+        var tempClient = new RestClient("http://source.baidu.com");
+        tempClient.Timeout = 15000;
+        tempClient.Proxy = new WebProxy((proxy as IDictionary<string, object>)["IpAddress"].ToString(), Convert.ToInt32((proxy as IDictionary<string, object>)["Port"]));
+        tempClient.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36"; ;
+        var tempRequest = new RestRequest(Method.GET);
+        IRestResponse tempRestResponse = await client.ExecuteTaskAsync(tempRequest);
+        if (tempRestResponse.StatusCode == HttpStatusCode.OK) {
+          i++;
+          Console.WriteLine($"{i}/300");
+          proxies.Add(proxy);
+        }
+      });
+      await Task.WhenAll(tasks);
 
-      //  }
-      //  wc.Encoding = Encoding.UTF8;
-      //  wc.Proxy = new WebProxy(proxy.IpAddress, proxy.Port);
-      //  string html = await wc.DownloadStringTaskAsync(new Uri("http://www.lagou.com/"));
-      //  proxies1.Add(proxy);
-      //}
-      //});
-      //await Task.WhenAll(tasks);
-      //for (int i = 0; i < proxies.Count; i++) {
-      //  try {
-      //    var testWeb = new HtmlWeb();
-      //    var testDoc = testWeb.Load(testUrl, "GET", new WebProxy(proxies[i].IpAddress, proxies[i].Port), new NetworkCredential());
-      //  } catch {
-      //    proxies.RemoveAt(i);
-      //    i--;
-      //    continue;
-      //  }
-      //}
       Console.ReadKey();
     }
   }
