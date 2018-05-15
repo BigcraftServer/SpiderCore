@@ -48,20 +48,33 @@ namespace SpiderCore {
 ";
       var requestPP = new ResponseParser() {
         Document = new Dictionary<string, DocumentParser>() {
-          { "Proxies",new DocumentParser("//table[@id='proxylisttable']/tbody/tr"){
-            OutputType = Enum.OutputType.Array,
-            Parser = new Dictionary<string,DocumentParser>(){
-              { "IpAddress",0 },
-              { "Port",1 },
-              { "CountryCode",2 },
-              { "AnonymousType",4},
-              { "Type",
-                new DocumentParser(6,new Dictionary<string,string>(){
-                    { "yes","HTTPS"},{"no","HTTP" }
-                  })
+          {
+            "Proxies",
+            new DocumentParser("//table[@id='proxylisttable']/tbody/tr"){
+              OutputType = Enum.OutputType.Array,
+              Parser = new Dictionary<string,DocumentParser>(){
+                { "IpAddress",0 },
+                { "Port",1 },
+                { "CountryCode",2 },
+                { "AnonymousType",4},
+                { "Type",
+                  new DocumentParser(6,new Dictionary<string,string>(){
+                      { "yes","HTTPS"},{"no","HTTP" }
+                    })
+                }
               }
             }
-          } }
+          },
+          {
+            "FAQs",
+            new DocumentParser("//div[@id='accordion']/div[@class='panel panel-default']"){
+              OutputType = Enum.OutputType.Array,
+              Parser = new Dictionary<string,DocumentParser>(){
+                {"Question",".//div[1]/h3/a" },
+                { "Answer",".//div[2]/div/p" }
+              }
+            }
+          }
         }
       };
       var url = "https://free-proxy-list.net/";
@@ -84,6 +97,13 @@ namespace SpiderCore {
         switch (parser.OutputType) {
           case Enum.OutputType.Text | Enum.OutputType.Convert:
             return parser.Converts[GetNode(node, parser.PositionType, parser.Position).InnerText];
+          case Enum.OutputType.Object:
+            dynamic objectResult = new System.Dynamic.ExpandoObject();
+            var objectResultMap = objectResult as IDictionary<string, object>;
+            foreach (var _parser in parser.Parser) {
+              objectResultMap[_parser.Key] = Parser(node, _parser.Value);
+            }
+            return objectResult;
           case Enum.OutputType.Text:
             return GetNode(node, parser.PositionType, parser.Position).InnerText;
           case Enum.OutputType.Html:
@@ -133,7 +153,7 @@ namespace SpiderCore {
       List<dynamic> proxies = new List<dynamic>();
       int i = 0;
       var tasks = (resultDic["Proxies"] as IList<dynamic>).Select(async proxy => {
-        var tempClient = new RestClient("http://source.baidu.com");
+        var tempClient = new RestClient("http://source.gbihealth.com");
         tempClient.Timeout = 15000;
         tempClient.Proxy = new WebProxy((proxy as IDictionary<string, object>)["IpAddress"].ToString(), Convert.ToInt32((proxy as IDictionary<string, object>)["Port"]));
         tempClient.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36"; ;
