@@ -6,6 +6,7 @@ using SpiderCore.Enum;
 using SpiderCore.Models;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -15,8 +16,32 @@ using System.Threading.Tasks;
 namespace SpiderCore {
   class Program {
     public static void Main(string[] args) {
-      MainAsync().Wait();
+            TestAsync().Wait();
     }
+        static async Task TestAsync() {
+            var tasks =Enumerable.Range(0, 40).Select(async c => {
+                var tempI = c;
+                var tempClient = new RestClient("https://accounts.gbihealth.localtest/Account/Login");
+                tempClient.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36";
+                if (tempClient.CookieContainer == null) {
+                    tempClient.CookieContainer = new CookieContainer();
+                }
+                var tempRequest = new RestRequest(Method.POST);
+                tempRequest.AddParameter("IsAsync", "true");
+                tempRequest.AddParameter("RememberMe", "true");
+                tempRequest.AddParameter("ValidCode", "");
+                tempRequest.AddParameter("BrowserIsPC", "true");
+                var timePerParse = Stopwatch.StartNew();
+                IRestResponse tempRestResponse = await tempClient.ExecuteTaskAsync(tempRequest);
+                timePerParse.Stop();
+                Console.WriteLine($"{tempI}/40\t\t:{timePerParse.ElapsedMilliseconds}");
+                Console.WriteLine(tempRestResponse.Cookies);
+            });
+            await Task.WhenAll(tasks);
+            Console.WriteLine("Over");
+            Console.ReadKey();
+
+        }
     static async Task MainAsync() {
       //      string ParserRule = @"
       //{
