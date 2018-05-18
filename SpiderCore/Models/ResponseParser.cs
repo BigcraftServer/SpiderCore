@@ -4,8 +4,8 @@ using System.Text;
 
 namespace SpiderCore.Models {
   public class ResponseParser {
-    public IDictionary<string, DocumentParser> Document { get; set; }
+    public IDictionary<string, DocumentParser> Documents { get; set; }
     public string Cookies { get; set; }
-    public string Header { get; set; }
+    public string Headers { get; set; }
   }
 }

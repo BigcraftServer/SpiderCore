@@ -18,36 +18,38 @@ namespace SpiderCore {
       MainAsync().Wait();
     }
     static async Task MainAsync() {
-      string ParserRule = @"
-{
-	""Document"": [{
-    ""Proxies"": {
-      ""XPath"": ""//table[@id='proxylisttable']/tbody/tr"",
-			""Type"": ""Array"",
-			""Parser"": {
-        ""IpAddress"": 0,
-				""Port"": 1,
-				""CountryCode"": 2,
-				""AnonymousType"": {
-            ""Position"": 4
-        },
-				""Type"": {
-            ""Position"": 5,
-				""Convert"": [{
-						""yes"": ""HTTPS""
-          },
-					{
-						""no"": ""HTTP""
-					}
-				]
-				}
-			}
-		}
-	}]
-}
-";
+      //      string ParserRule = @"
+      //{
+      //	""Document"": [{
+      //    ""Proxies"": {
+      //      ""XPath"": ""//table[@id='proxylisttable']/tbody/tr"",
+      //			""Type"": ""Array"",
+      //			""Parser"": {
+      //        ""IpAddress"": 0,
+      //				""Port"": 1,
+      //				""CountryCode"": 2,
+      //				""AnonymousType"": {
+      //            ""Position"": 4
+      //        },
+      //				""Type"": {
+      //            ""Position"": 5,
+      //				""Convert"": [{
+      //						""yes"": ""HTTPS""
+      //          },
+      //					{
+      //						""no"": ""HTTP""
+      //					}
+      //				]
+      //				}
+      //			}
+      //		}
+      //	}]
+      //}
+      //";
+      string ParserRule1 = "[{\"Index\":0,\"OutputType\":\"Text\"},{\"XPath\":\"//table[@id='proxylisttable']/tbody/tr\",\"OutputType\":\"Array\",\"Converts\":{\"no\":\"HTTP\",\"yes\":\"HTTPS\"}}]";
+      var obj = Newtonsoft.Json.JsonConvert.DeserializeObject<IList<DocumentParser>>(ParserRule1);
       var requestPP = new ResponseParser() {
-        Document = new Dictionary<string, DocumentParser>() {
+        Documents = new Dictionary<string, DocumentParser>() {
           {
             "Proxies",
             new DocumentParser("//table[@id='proxylisttable']/tbody/tr"){
@@ -57,11 +59,15 @@ namespace SpiderCore {
                 { "Port",1 },
                 { "CountryCode",2 },
                 { "AnonymousType",4},
-                { "Type",
-                  new DocumentParser(6,new Dictionary<string,string>(){
-                      { "yes","HTTPS"},{"no","HTTP" }
-                    })
-                }
+                //{ "Type",
+                //  new DocumentParser(
+                //    6,
+                //    new ConvertParserList(){
+                //      { "yes", "HTTPS" },
+                //      { "no", "HTTP" }
+                //    }
+                //  )
+                //}
               }
             }
           },
@@ -95,8 +101,6 @@ namespace SpiderCore {
 
       object Parser(HtmlNode node, DocumentParser parser) {
         switch (parser.OutputType) {
-          case Enum.OutputType.Text | Enum.OutputType.Convert:
-            return parser.Converts[GetNode(node, parser.PositionType, parser.Position).InnerText];
           case Enum.OutputType.Object:
             dynamic objectResult = new System.Dynamic.ExpandoObject();
             var objectResultMap = objectResult as IDictionary<string, object>;
@@ -106,6 +110,8 @@ namespace SpiderCore {
             return objectResult;
           case Enum.OutputType.Text:
             return GetNode(node, parser.PositionType, parser.Position).InnerText;
+          case Enum.OutputType.Convert:
+            return parser.Converts[GetNode(node, parser.PositionType, parser.Position).InnerText];
           case Enum.OutputType.Html:
             return GetNode(node, parser.PositionType, parser.Position).InnerHtml;
           case Enum.OutputType.Array:
@@ -147,18 +153,19 @@ namespace SpiderCore {
         }
       }
 
-      foreach (var item in requestPP.Document) {
+      foreach (var item in requestPP.Documents) {
         resultDic[item.Key] = Parser(doc.DocumentNode, item.Value);
       }
       List<dynamic> proxies = new List<dynamic>();
       int i = 0;
       var tasks = (resultDic["Proxies"] as IList<dynamic>).Select(async proxy => {
-        var tempClient = new RestClient("http://source.gbihealth.com");
+        var tempClient = new RestClient("https://accounts.gbihealth.com");
         tempClient.Timeout = 15000;
         tempClient.Proxy = new WebProxy((proxy as IDictionary<string, object>)["IpAddress"].ToString(), Convert.ToInt32((proxy as IDictionary<string, object>)["Port"]));
         tempClient.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36"; ;
         var tempRequest = new RestRequest(Method.GET);
-        IRestResponse tempRestResponse = await client.ExecuteTaskAsync(tempRequest);
+        IRestResponse tempRestResponse = await tempClient.ExecuteTaskAsync(tempRequest);
+        Console.WriteLine(tempRestResponse.Server);
         if (tempRestResponse.StatusCode == HttpStatusCode.OK) {
           i++;
           Console.WriteLine($"{i}/300");
